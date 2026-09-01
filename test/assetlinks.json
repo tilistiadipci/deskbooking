@@ -1,0 +1,5 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target" : { "namespace": "android_app", "package_name": "com.bioexperience.smrbioasdp",
+               "sha256_cert_fingerprints": ["D5:E7:20:CB:33:4F:DB:B6:BB:38:59:1E:E9:BA:8F:A5:B5:FA:BF:13:55:8D:4C:D4:C8:8C:C6:A1:BF:C7:FE:90"] }
+}]

@@ -1,0 +1,11 @@
+{
+    "name": "biocipta/booking",
+    "description": "aplikasi smart meeting",
+    "license": "Apache",
+    "authors": [
+        {
+            "name": "Pt. Bio Cipta Teknologi"
+        }
+    ],
+    "require": {}
+}

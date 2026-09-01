@@ -1,0 +1,30 @@
+/vendor
+/system/sessions
+/assets/theme/images/uploadfoto
+/assets/theme/images/image-gallery
+/assets/pantry
+/assets/file
+/application/third_party
+/env.php
+/config.js
+/conn.js
+/.env
+/.env.*
+!/.env.example
+!/.env.example.*
+
+# Private keys and service-account credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+**/*private-key*.json
+**/*private_key*.json
+**/*privatekey*.json
+**/*service-account*.json
+**/*service_account*.json
+**/*credentials*.json
+
+# Large application packages
+*.apk

@@ -1,0 +1,7 @@
+{
+	"host" : "bio-experience.com",
+	"port" : 465,
+	"user" : "meeting@bio-experience.com",
+	"pass" : "",
+	"secure" : true
+}

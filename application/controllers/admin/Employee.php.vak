@@ -1,0 +1,612 @@
+<?php
+defined('BASEPATH') OR exit('No direct script access allowed');
+date_default_timezone_set(APP_GMT);
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+class Employee extends CI_Controller {
+	public function __construct(){
+		parent::__construct();
+
+		$this->load->model('Model_Menu');
+		$this->load->model('Model_Admin');
+		$this->load->helper('response');
+		$this->load->helper('download');
+		if($this->session->userdata('logged-in')){
+			if($this->session->userdata('levelid-nya') == 1){
+				// redirect('authentication');
+			}else if($this->session->userdata('levelid-nya') == 2){
+				// 
+			}else{
+				redirect('authentication');
+
+			}
+		}else{
+			redirect('authentication');
+		}
+	}
+	public function index()
+	{
+		$pagename = "Employee";
+		$menu = $this->Model_Menu->getMenu($pagename);
+		$getDivision = $this->Model_Admin->getDataAlocationType()['data']; 	
+		$this->load->view('Admin/Employee/index', array('menumaster'=> $menu, 'pagename' => $pagename, 'alocation' => $getDivision ));
+	}
+	public function getData()
+	{
+		$data = $this->Model_Admin->getDataEmployee();
+		if($data['error'] == null){
+			echo response("success", $data['data'], "Get success");
+		}else{
+			echo response("fail", $data, "Get failed");
+		}
+	}
+	public function getDepartement()
+	{
+		$id = $this->uri->segment(4);
+		$where = array('a.type' => $id );
+		$data = $this->Model_Admin->getDataAlocationData($where);
+		if($data['error'] == null){
+			echo response("success", $data['data'], "Get success");
+		}else{
+			echo response("fail", $data, "Get failed");
+		}
+	}
+	public function getDetailEmployee()
+	{
+		$id = $this->uri->segment(4);
+		$data = $this->Model_Admin->getEditEmployee($id);
+		if($data['error'] == null){
+			echo response("success", $data['data'], "Get success");
+		}else{
+			echo response("fail", $data, "Get failed");
+		}
+	}
+	public function getEdit()
+	{
+		$id = $this->uri->segment(4);
+		// print_r($id);
+		$data = $this->Model_Admin->getEditEmployeeByID($id);
+		if($data['error'] == null){
+			echo response("success", $data['data'], "Get success");
+		}else{
+			echo response("fail", $data, "Get failed");
+		}
+	}
+	public function postCreate()
+	{
+		$post = $_POST;
+		$idx = date('YmdHis');
+		$id = "i".random_string('numeric', 3).$idx; // nik
+		$getUserConf =  $this->Model_Admin->select_all_data('user_config', array(), array(), 'row');// user_config
+		$default_password = $getUserConf['default_password'];
+		$datetime = date("Y-m-d H:i:s");
+		$post['created_at'] = $datetime ;
+		$post['updated_at'] = $datetime ;
+		$post['is_deleted'] =0;
+		$post['id'] =$id;
+		$post['nik'] =$id;
+		$username = $post['nik_display'];
+		// $username
+		$password = encryp_data($default_password);
+		$insertEmployeeUser = array(
+			"name" => $post['name'],
+			"username" => $username,
+			"password" => $password,
+			"real_password" => $default_password,
+			"employee_id" => $id,
+			"is_disactived" => 0,
+			'created_by' => $this->session->userdata('user-nya'),
+			'created_at' => $datetime,
+			'is_deleted' => 0,
+			"level_id" => 2, // user biasa
+		);
+		$wmatrix = array(
+			'nik' => $id,
+			'alocation_id' =>$post['department_id'], // alocation_id
+		);
+		$insertmatrix = array(
+			'nik' => $id,
+			'alocation_id' =>$post['department_id'], // alocation_id
+		);
+		// echo "<pre>";
+		// print_r($insertEmployeeUser);
+		// die();
+		$resp = $this->Model_Admin->deleteData('alocation_matrix', $wmatrix);
+		$this->Model_Admin->logActivity("DELETE", "DELETE MATRIX ".$id." - ".$post['department_id']);
+		$resp = $this->Model_Admin->insertData('alocation_matrix', $insertmatrix);
+		$this->Model_Admin->logActivity("ADD", "ADD MATRIX ".$id." - ".$post['department_id']);
+		$resp = $this->Model_Admin->insertData('employee', $post);
+		$this->Model_Admin->logActivity("ADD", "ADD EMPLOYEE ".$id." - ".$post['name']);
+		$resp123 = $this->Model_Admin->insertData('user', $insertEmployeeUser);
+		$this->Model_Admin->logActivity("ADD", "ADD USER ".$id." - ".$post['name']);
+		if($resp){
+	    	$response = response("success", array(), "Success create a employee ".$post['name']);
+			echo $response;
+		}else{
+			$response = response("fail", array(), "Failed create a employee ".$post['name']);
+			echo $response;
+		}
+	}
+	public function postUpdate()
+	{
+		$post = $_POST;
+		$id = $this->uri->segment(4);
+		if($id == "" || empty($id)){
+			$response = response("fail", array(), "Failed data employee not found");
+			echo $response;
+			die();
+		}
+		
+		$datetime = date("Y-m-d H:i:s");
+		$post['updated_at'] = $datetime ;
+		$getUserConf =  $this->Model_Admin->select_all_data('employee', array('id'=>$id), array(), 'row');// user_config
+		if($getUserConf['department_id'] !=  $post['department_id']){
+			$wmatrix = array( 'nik' => $id, 'alocation_id' =>$getUserConf['department_id'], );
+			$insertmatrix = array( 'nik' => $id, 'alocation_id' =>$post['department_id'], ); // alocation_id
+			$resp = $this->Model_Admin->deleteData('alocation_matrix', $wmatrix);
+			$this->Model_Admin->logActivity("DELETE", "DELETE MATRIX ".$id." - ".$post['department_id']);
+			$resp = $this->Model_Admin->insertData('alocation_matrix', $insertmatrix);
+			$this->Model_Admin->logActivity("ADD", "ADD MATRIX ".$id." - ".$post['department_id']);
+		}
+		$wh = array('id'=>$id);
+		unset($post['id']);
+		$resp = $this->Model_Admin->updateData('employee', $post, $wh);
+		if($resp){
+	    	$response = response("success", array(), "Success update a employee ".$post['name']);
+			echo $response;
+		}else{
+			$response = response("fail", array(), "Failed update a employee ".$post['name']);
+			echo $response;
+		}
+	}
+	public function postDelete()
+	{
+		$post = $_POST;
+		$d = array(
+			'is_deleted' => 1
+		);
+		$w = array ( "id"=>$post['id']);
+		$resp = $this->Model_Admin->updateData('employee', $d, $w);
+		if($resp){
+	    	$response = response("success", array(), "Success delete a employee ".$post['name']);
+			echo $response;
+		}else{
+			$response = response("fail", array(), "Failed delete a employee ".$post['name']);
+			echo $response;
+		}
+	}
+
+	public function donwloadTemplate()
+	{
+		force_download('assets/file/template/template.xls',NULL);
+	}
+	public function uploadFile()
+	{
+		include APPPATH.'third_party/phpspreadsheet/autoload.php';
+		$datetime = date("Y-m-d H:i:s");
+		if(!empty($_FILES['file']['name'])) { 
+			$ext = pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION);
+			if($ext == 'csv'){
+                    $reader = new \PhpOffice\PhpSpreadsheet\Reader\Csv();
+            } else if($ext == 'xlsx') {
+                    $reader = new \PhpOffice\PhpSpreadsheet\Reader\Xlsx();
+            } else if($ext == 'xls') {
+                    $reader = new \PhpOffice\PhpSpreadsheet\Reader\Xls();
+            } else{
+            	$response = response("fail", array(), "Extension isn't CSV, XLSX, or XLS ");
+				echo $response;
+				die();
+            }
+            $spreadsheet = $reader->load($_FILES['file']['tmp_name']);
+            $allDataInSheet = $spreadsheet->getActiveSheet()->toArray(null, true, true, true);
+			unset($allDataInSheet[1]);
+			$var_batch = array();
+			$var_batchuser = array();
+			$getUserConf =  $this->Model_Admin->select_all_data('user_config', array(), array(), 'row');
+			$default_password = $getUserConf['default_password'];
+			$datetime = date("Y-m-d H:i:s");
+			$password = encryp_data($default_password);
+			foreach ($allDataInSheet as $k => $val) {
+				$idx = date('YmdHis');
+				$id = "i".random_string('numeric', 16); // nik
+				// $id = random_string('numeric', 10);
+				// $password = encryp_data("1234");
+				$company_id = $val["A"]; // 
+				$division_id = $val["B"]; // 
+				$department_id = $val["C"]; // 
+				$username = $val["D"]; // nik
+				$nik = $val["D"]; // nik
+				$name = $val["E"];
+				$email = $val["F"];
+				$no_phone = $val["G"];
+				$no_ext = $val["H"];
+				$birth_date = $val["I"];
+				$gender = $val["J"];
+				$address = $val["K"];
+				$card_number = $val["L"];
+				$insertEmployeeUser = array(
+					"name" => $name,
+					"username" => $username,
+					"password" => $password,
+					"real_password" => $default_password,
+					"employee_id" => $id,
+					"is_disactived" => 0,
+					'created_by' => $this->session->userdata('user-nya'),
+					'created_at' => $datetime,
+					'is_deleted' => 0,
+					"level_id" => 2, // user biasa
+				);
+
+				$dataInsert = array(
+					"id" => $id,
+					"company_id" => $company_id,
+					"division_id" => $division_id,
+					"department_id" => $department_id,
+					"name" => $name,
+					"nik" => $id, // 
+					"nik_display" => $nik,
+					"birth_date" => $birth_date,
+					"gender" => $gender,
+					"address" => $address,
+					"card_number_real" => $card_number,
+					"card_number" => $card_number,
+					"no_phone" => $no_phone,
+					"no_ext" => $no_ext,
+				);
+				if(!empty($dataInsert['name'])){
+					array_push($var_batch, $dataInsert);
+					array_push($var_batchuser, $insertEmployeeUser);
+				}
+				
+			}
+			if(count($var_batch) > 0){
+				// print_r($var_batch);
+				// print_r($var_batchuser);
+				$resp = $this->Model_Admin->insertDataBatch('employee', $var_batch);
+				$resp23 = $this->Model_Admin->insertDataBatch('user', $var_batchuser);
+				$fileassets = array(
+					"name" => $_FILES['file']['name'],
+					"time" => date('Y-m-d H:i:s'),
+					"total_row" => count($var_batch),
+					"total_size" => $_FILES['file']['size'],
+					"is_deleted" => 0
+				);
+				$resp = $this->Model_Admin->insertData('batch_upload', $fileassets);
+				if($resp){
+					$config['upload_path']          = './assets/file/upload/';
+	            	$config['allowed_types']        = 'xls|csv|xlsx';
+	            	$config['max_size']             = 10000000;
+	            	$this->load->library('upload', $config);
+	            	if ( ! $this->upload->do_upload('file')){
+						$error = array('error' => $this->upload->display_errors());
+						$response = response("fail", $error , "Failed upload batch to  employee ");
+						echo $response;
+					}else{ 
+						// success
+						$response = response("success", array(), "Success upload batch to  employee ");
+						echo $response;
+					}
+				}else{
+					$response = response("fail", array(), "Failed upload batch to  employee ");
+					echo $response;
+				}
+			}else{
+				$response = response("fail", array(), "Failed content is empty ");
+				echo $response;
+			}
+			
+		}else{
+			$response = response("fail", array(), "Failed file is empty");
+			echo $response;
+		}
+	}
+	public function postCreateNew()
+	{
+		$list_controller = 
+		$post = $_POST;
+		$files = $_FILES;
+		$photo_name = $_FILES['photo']['name'];
+		$path_tmp = $_FILES['photo']['tmp_name'];
+		if($photo_name != "" ){
+			$extsp = explode(".", $files['photo']['name']);
+			$ext = end($extsp);
+			$file_name =gen_uuid(). "." .$ext;
+			$config = array();
+			$config['file_name']     = $file_name;
+			$config['upload_path']   = './assets/employee/';
+	        $config['allowed_types'] = 'png|jpg|jpeg';
+			$this->load->library('upload', $config);
+	        if ( ! $this->upload->do_upload('photo'))
+	        {
+	            $photo_name = "";
+	            $error =  $this->upload->display_errors();
+	            // print_r($error);
+	            die();
+	        }
+	        else
+	        {
+	            $photo_name = $file_name;
+	        }
+		}
+		// die();
+		$idx = date('YmdHis');
+		// $id = random_string('numeric', 3).$idx; // nik
+		$id = "".$idx; // nik
+		$getUserConf =  $this->Model_Admin->select_all_data('user_config', array(), array(), 'row');// user_config
+		$default_password = $getUserConf['default_password'];
+		$datetime = date("Y-m-d H:i:s");
+		// $post['card_number']     = $id;
+		$post['created_at'] = $datetime ;
+		$post['updated_at'] = $datetime ;
+		$post['is_deleted'] =0;
+		$post['id'] =$id;
+		$post['nik'] =$id;
+		$post['gb_id'] ="";
+		$post['photo'] =$photo_name;
+		$username = $post['nik_display'];
+		// $username
+		$password = encryp_data($default_password);
+		$insertEmployeeUser = array(
+			"name" => $post['name'],
+			"username" => $username,
+			"password" => $password,
+			"real_password" => $default_password,
+			"employee_id" => $id,
+			"is_disactived" => 0,
+			'created_by' => $this->session->userdata('user-nya'),
+			'created_at' => $datetime,
+			'is_deleted' => 0,
+			"level_id" => 2, // user biasa
+		);
+		$wmatrix = array(
+			'nik' => $id,
+			'alocation_id' =>$post['department_id'], // alocation_id
+		);
+		$insertmatrix = array(
+			'nik' => $id,
+			'alocation_id' =>$post['department_id'], // alocation_id
+		);
+		$gbAccess = false;
+		$gbFalco = false;
+
+		if($photo_name != ""){
+			$arGB = "http://192.168.0.20:8080/people?";
+			$GBDataSetting = $this->GBAddCardDataSetting($post);
+			$uriParamGB = $arGB.$GBDataSetting['query'];
+			$fgcGB = file_get_contents(FCPATH."assets/employee/".$photo_name);
+			$gbVaultSend = $this->uploadDataToFRGB($uriParamGB, $fgcGB, $GBDataSetting ['header']);
+			$jgbVaultSend = json_decode($gbVaultSend, true);
+			$jgbGBidentifiedFaces = $jgbVaultSend['identifiedFaces'];
+			if(count($jgbGBidentifiedFaces) > 0){
+				$pGb = $jgbGBidentifiedFaces[0];
+				$post['gb_id'] =$pGb['personId'];
+				$gbAccess = true;
+			}
+		}
+		$arIp = array("http://192.168.0.111:8090/","http://192.168.0.112:8090/","http://192.168.0.113:8090/","http://192.168.0.114:8090/","http://192.168.0.115:8090/","http://192.168.0.115:8090/","http://192.168.0.116:8090/","http://192.168.0.117:8090/","http://192.168.0.118:8090/");
+		// $arIp = array("http://192.168.0.111:8090/");
+		$arFalcoVault = "http://192.168.0.51/vaultSite/APIwebservice.asmx";
+		$falcoVaultData = $this->falcoAddCardData($post,$photo_name);
+		$falcoVaultSend = $this->uploadDataToVaultFalco($arFalcoVault, $falcoVaultData);
+		$b64 = "";
+		foreach ($arIp as $key => $value) {
+			$uri = $value."person/create";
+			$uriphoto = $value."face";
+			$bb = array (
+				"id" => $id,
+				"name" => $post['name'] ,
+				"idcardNum" => $post['card_number'] ,
+				"iDNumber" => $id ,
+				"facePermission" => 2,
+				"idCardPermission" => 2,
+				"faceAndCardPermission" => 2,
+				"iDPermission" => 2,
+				"tag" => "",
+				"phone" => "",
+				"passwordPermission" => 1,
+			);
+			// ========================================================================================
+			// =============   ===========   ==========   ========  ===== ==== == === === === ==== ====
+			// ========================================================================================
+			$bjson = json_encode($bb);
+			$fbodyfr =  "person=".$bjson ."&pass=1011121314";
+			$df = $this->uploadDataToFRFalco($uri, $fbodyfr);
+			// print_r($df);
+			if($photo_name != ""){
+				$fgcd = file_get_contents(FCPATH."assets/employee/".$photo_name);
+				$b_64file = base64_encode($fgcd);
+				// $b64 = $b_64file;
+				$bbphoto = array (
+					"personId" => $id,
+					"base64" => $b_64file ,
+					"faceId" => $id ,
+					"pass" => "1011121314" ,
+				);
+				$fbodyphoto = http_build_query($bbphoto);
+				// echo "<pre>";
+				// print_r($uriphoto);
+				// print_r($fbodyphoto);
+				$frbackFalco =  $this->uploadPhotoToFRFalco($uriphoto , $fbodyphoto);
+				// echo "<pre>";
+				// print_r($frbackFalco);
+				// print_r($bbphoto);
+			}
+		}
+
+		$resp = $this->Model_Admin->deleteData('alocation_matrix', $wmatrix);
+		$this->Model_Admin->logActivity("DELETE", "DELETE MATRIX ".$id." - ".$post['department_id']);
+		$resp = $this->Model_Admin->insertData('alocation_matrix', $insertmatrix);
+		$this->Model_Admin->logActivity("ADD", "ADD MATRIX ".$id." - ".$post['department_id']);
+		$resp = $this->Model_Admin->insertData('employee', $post);
+		$this->Model_Admin->logActivity("ADD", "ADD EMPLOYEE ".$id." - ".$post['name']);
+		$resp123 = $this->Model_Admin->insertData('user', $insertEmployeeUser);
+		$this->Model_Admin->logActivity("ADD", "ADD USER ".$id." - ".$post['name']);
+
+		
+		// $arIp = array("http://192.168.0.111:8090/");
+
+		if($resp){
+	    	$response = response("success", array('base64'=>$b64, "falco"=>$falcoVaultSend ), "Success create a employee ".$post['name']);
+			echo $response;
+		}else{
+			$response = response("fail", array(), "Failed create a employee ".$post['name']);
+			echo $response;
+		}
+	}
+
+	private function uploadDataToVaultFalco($url, $xmlbody){
+		$ch = curl_init();
+		curl_setopt($ch, CURLOPT_URL,$url);
+		curl_setopt($ch, CURLOPT_POST, 1);
+		curl_setopt($ch, CURLOPT_POSTFIELDS, $xmlbody);
+		curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: text/xml'));
+		// curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/x-www-form-urlencoded'));
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+		$server_output = curl_exec ($ch);
+		curl_close ($ch);
+		// $array_data = json_decode(json_encode(simplexml_load_string($server_output)), true);
+		return $server_output;
+	}
+	private function uploadDataToFRGB($url, $body, $header){
+		$ch = curl_init();
+		curl_setopt($ch, CURLOPT_URL,$url);
+		curl_setopt($ch, CURLOPT_POST, 1);
+		curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+		curl_setopt($ch, CURLOPT_HTTPHEADER, $header);
+		// curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/x-www-form-urlencoded'));
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+		$server_output = curl_exec ($ch);
+		curl_close ($ch);
+		// $array_data = json_decode(json_encode(simplexml_load_string($server_output)), true);
+		return $server_output;
+	}
+	private function uploadDataToFRFalco($url, $body){
+
+		$ch = curl_init();
+
+		curl_setopt($ch, CURLOPT_URL,$url);
+		curl_setopt($ch, CURLOPT_POST, 1);
+		curl_setopt($ch, CURLOPT_POSTFIELDS,
+		             $body);
+		curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/x-www-form-urlencoded'));
+		// receive server response ...
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+		$server_output = curl_exec ($ch);
+		curl_close ($ch);
+		return $server_output;
+	}
+	private function uploadPhotoToFRFalco($url, $body){
+
+		$ch = curl_init();
+
+		curl_setopt($ch, CURLOPT_URL,$url);
+		curl_setopt($ch, CURLOPT_POST, 1);
+		curl_setopt($ch, CURLOPT_POSTFIELDS,
+		             $body);
+		curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/x-www-form-urlencoded'));
+		// receive server response ...
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+		$server_output = curl_exec ($ch);
+		curl_close ($ch);
+		return $server_output;
+	}
+	private function GBAddCardDataSetting($data){
+		$spname = explode(" ", $data['name']);
+		$getFirstname = $spname[0];
+		if(count($spname) > 1){
+			$getLastname = end($spname);
+		}else{
+			$getLastname = "";
+		}
+		$bbGB = array (
+				"insert" => "true",
+				"update" => "true" ,
+				"update-if-lower-quality" => "false" ,
+				"merge" => "true" ,
+				"regroup" => "false",
+				"detect-age" => "false",
+				"detect-gender" => "false",
+				"detect-sentiment" => "false",
+				"detect-occlusion" => "false",
+				"detect-mask" => "false",
+				"differentiate" => "false",
+				"similar_limit" => 0,
+				"linear-match" => "false",
+				"site" => 'default',
+				"source" => 'default',
+				"provide-face-id" => "true",
+				"min-cpq" => -1,
+				"min-fcq" => -1,
+				"min-fsq" => -1,
+				"insert-profile" => "false",
+				"max-occlusion" => -1,
+				"event" => "none",
+				"context" => "live",
+				"type" => "person",
+				"include-expired" => "false",
+		);
+		$hGB = array(
+				'Content-Type: application/octet-stream',
+				'X-RPC-DIRECTORY: main',
+				'X-RPC-PERSON-FIRST-NAME: '.$getFirstname ,
+				'X-RPC-PERSON-LAST-NAME: '.$getLastname,
+				'X-RPC-PERSON-NAME: '.$data['name'],
+				'X-RPC-EXTERNAL-ID: '.$data['id'],
+				'X-RPC-AUTHORIZATION:telkomsigma:@telkom2021',
+			);
+		return array('header'=>$hGB, 'query'=>http_build_query($bbGB), 'arQuery'=>$bbGB);
+	}
+	private function falcoAddCardData($data, $photo_name = ""){
+
+		$u = base_url()."assets/employee/".$photo_name;
+		if($photo_name == ""){
+			$u = "";
+		}
+		$t = '<?xml version="1.0" encoding="utf-8"?>
+			<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+			  <soap:Body>
+			    <AddCard xmlns="WebAPI">
+			      <CardProfile>
+			        <CardNo>'.$data['card_number'].'</CardNo>
+			        <Name>'.$data['name'].'</Name>
+			        <CardPinNo></CardPinNo>
+			        <CardType></CardType>
+			        <Department></Department>
+			        <Company></Company>
+			        <Gentle></Gentle>
+			        <AccessLevel>02</AccessLevel>
+			        <LiftAccessLevel>00</LiftAccessLevel>
+			        <BypassAP>false</BypassAP>
+			        <ActiveStatus>true</ActiveStatus>
+			        <NonExpired>false</NonExpired>
+			        <ExpiredDate>9999/12/12</ExpiredDate>
+			        <VehicleNo>string</VehicleNo>
+			        <FloorNo>string</FloorNo>
+			        <UnitNo>string</UnitNo>
+			        <ParkingNo>string</ParkingNo>
+			        <StaffNo>'.$data['id'].'</StaffNo>
+			        <Title></Title>
+			        <Position></Position>
+			        <NRIC></NRIC>
+			        <Passport></Passport>
+			        <Race></Race>
+			        <DOB>1950/08/28</DOB>
+			        <JoiningDate>1900/12/12</JoiningDate>
+			        <ResignDate>9999/12/12</ResignDate>
+			        <Address1>'.$data['address'].'</Address1>
+			        <Address2>'.$data['address'].'</Address2>
+			        <PostalCode></PostalCode>
+			        <City></City>
+			        <State></State>
+			        <Email>'.$data['email'].'</Email>
+			        <MobileNo>'.$data['no_phone'].'</MobileNo>
+			        <Photo>'.$u.'</Photo>
+			        <DownloadCard>true</DownloadCard>
+			      </CardProfile>
+			    </AddCard>
+			  </soap:Body>
+			</soap:Envelope>';
+		return $t;
+	}
+
+	
+}

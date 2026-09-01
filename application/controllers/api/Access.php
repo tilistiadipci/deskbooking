@@ -1,0 +1,372 @@
+<?php
+defined('BASEPATH') OR exit('No direct script access allowed');
+date_default_timezone_set("Asia/Jakarta");
+class Access extends CI_Controller {
+
+	public function __construct(){
+		parent::__construct();
+
+		$this->load->model('Model_Api');
+		$this->load->model('Model_URL');
+		$this->load->helper('response');
+		$this->load->library('curl'); 
+		$this->output->set_content_type('application/json');
+		
+	}
+	public function checkDoorOpenMeetingQr()
+	{
+		$json = file_get_contents("php://input");
+		$post = json_decode($json, TRUE);
+		$datetime = date("Y-m-d H:i:s");
+		if(isset($post['username']) && $post['username'] != ""){
+			$getData = $this->Model_Api->checkDoorOpenMeetingQr($post);
+			if($getData['error'] == null && count($getData['data']) > 0  ){
+				$msg = "";
+				// print( $getData['data']);
+				$pin_qr = $$post['nik']; //QR DAN PIN MENJADI NIK
+				$row = $getData['data'][0];
+				$open = $this->openDoor($row['room_id'],$pin_qr);
+				if($open == "success"){
+					$geMsg = $this->Model_Api->logPinStatus(4)['data'];
+					if(count($geMsg) <= 0){
+						$msg = "You have permission";
+					}else{
+						$msg = $geMsg[0]['text'];
+					}
+					$ins = $this->insertLogNik($row['booking_id'], $row['room_id'], 0, $row['nik'], $datetime, $msg, 3);
+					$response = response("success", array(), $msg);
+					echo $response ;
+				}else{
+					$geMsg = $this->Model_Api->logPinStatus(2)['data'];
+					if(count($geMsg) <= 0){
+						$msg = "Access door not connected";
+					}else{
+						$msg = $geMsg[0]['text'];
+					}
+					$ins = $this->insertLogNik($row['booking_id'], $row['room_id'], 0, $row['nik'], $datetime, $msg, 2);
+					$response = response("fail", array(), $msg);
+					echo $response ;
+				}
+			}else{
+				$msg = "";
+				$geMsg = $this->Model_Api->logPinStatus(5)['data'];
+				if(count($geMsg) <= 0){
+					$msg = "You don't have permission";
+				}else{
+					$msg = $geMsg[0]['text'];
+				}
+				$ins = $this->insertLogNik("", $post['room_id'], 0,$post['nik'], $datetime, $msg, 1);
+				$response = response("fail", array(), $msg);
+				echo $response ;	
+			}
+			
+		}else{
+			$response = response("fail", array(), "Failed restrict access");
+			echo $response ;
+		}
+	}
+	public function checkDoorOpenMeetingQrDisplay()
+	{
+		$json = file_get_contents("php://input");
+		$post = json_decode($json, TRUE);
+		$datetime = date("Y-m-d H:i:s");
+		if(isset($post['pin']) && isset($post['booking_id']) ){
+			
+		}else{
+			$response = response("fail", array(), "Failed restrict access");
+			echo $response ;
+			die();
+		}
+		$getData = $this->Model_Api->checkDoorOpenMeetingQrDisplay($post);
+			// print_r( $post);
+			// print_r( $getData['data']);
+			if($getData['error'] == null && count($getData['data']) > 0  ){
+				$msg = "";
+				$row = $getData['data'][0];
+				$pin_qr = $post['pin'];
+				$open = $this->openDoor($row['room_id'],$pin_qr );
+				if($open == "success"){
+					$geMsg = $this->Model_Api->logPinStatus(4)['data'];
+					if(count($geMsg) <= 0){
+						$msg = "You have permission";
+					}else{
+						$msg = $geMsg[0]['text'];
+					}
+					$ins = $this->insertLogNik($row['booking_id'], $row['room_id'], 0, $row['nik'], $datetime, $msg, 3);
+					$response = response("success", array(), $msg);
+					echo $response ;
+				}else{
+					$geMsg = $this->Model_Api->logPinStatus(2)['data'];
+					if(count($geMsg) <= 0){
+						$msg = "Access door not connected";
+					}else{
+						$msg = $geMsg[0]['text'];
+					}
+					$ins = $this->insertLogNik($row['booking_id'], $row['room_id'], 0, $row['nik'], $datetime, $msg, 2);
+					$response = response("fail", array(), $msg);
+					echo $response ;
+				}
+			}else{
+				$msg = "";
+				$geMsg = $this->Model_Api->logPinStatus(5)['data'];
+				if(count($geMsg) <= 0){
+					$msg = "You don't have permission";
+				}else{
+					$msg = $geMsg[0]['text'];
+				}
+				// $ins = $this->insertLogNik("", $post['room_id'], 0,$post['nik'], $datetime, $msg, 1);
+				$response = response("fail", array(), $msg);
+				echo $response ;	
+			}
+			
+	}
+	public function checkDoorOpenMeetingPin()
+	{
+		$json = file_get_contents("php://input");
+		$post = json_decode($json, TRUE);
+		$datetime = date("Y-m-d H:i:s");
+		if(isset($post['username']) && $post['username'] != ""){
+			$getData = $this->Model_Api->checkDoorOpenMeetingPin($post);
+			
+
+			if($getData['error'] == null && count($getData['data']) > 0  ){
+				$msg = "";
+				$row = $getData['data'][0];
+				$pin_qr = $post['pin'];
+				$open = $this->openDoor($row['room_id'],$pin_qr );
+				if($open == "success"){
+					$geMsg = $this->Model_Api->logPinStatus(3)['data'];
+					if(count($geMsg) <= 0){
+						$msg = "Pin have permission";
+					}else{	
+						$msg = $geMsg[0]['text'];
+					}
+					$ins = $this->insertLogPin($row['booking_id'], $row['room_id'], 0,$post['pin'], $datetime, $msg, 1);
+					$response = response("success", array(), $msg);
+					echo $response ;
+				}else{
+					$geMsg = $this->Model_Api->logPinStatus(2)['data'];
+					if(count($geMsg) <= 0){
+						$msg = "Access door not connected";
+					}else{
+						$msg = $geMsg[0]['text'];
+					}
+					$ins = $this->insertLogPin($row['booking_id'], $row['room_id'], 0,$post['pin'], $datetime, $msg, 2);
+					$response = response("fail", array(), $msg);
+					echo $response ;
+				}
+			}else{
+
+				// route 2 with default pin
+				$ar = array('667928',"882915","882914","882913","882912","882911","528974");
+				
+				//die();
+				if (in_array($post['pin'], $ar))
+				{
+					//$row = $pinDefault['data'][0];
+					$pin_qr = $post['pin'];
+					$open = $this->openDoor($post['room_id'],$pin_qr );
+						$geMsg = $this->Model_Api->logPinStatus(3)['data'];
+						if(count($geMsg) <= 0){
+							$msg = "Pin default have permission";
+						}else{
+							$msg = $geMsg[0]['text'];
+						}
+						$ins = $this->insertLogPin("", $post['room_id'], 1,$post['pin'], $datetime, $msg, 1);
+						$response = response("success", array(), $msg);
+						echo $response ;	
+				}
+				else
+				{
+					// accesspinDefault
+					$pinDefault = $this->Model_Api->checkDoorOpenMeetingPinDefault($post);
+					if($pinDefault['error'] == null && count($pinDefault['data']) > 0){
+						$msg = "";
+						$pin_qr = $post['pin'];
+						$open = $this->openDoor($post['room_id'], $pin_qr);
+						// print_r($open);
+						
+						if($open == "success"){
+							$row = $pinDefault['data'][0];
+							$geMsg = $this->Model_Api->logPinStatus(3)['data'];
+							if(count($geMsg) <= 0){
+								$msg = "Pin default have permission";
+							}else{
+								$msg = $geMsg[0]['text'];
+							}
+							$ins = $this->insertLogPin("", $post['room_id'], 1,$post['pin'], $datetime, $msg, 1);
+							$response = response("success", array(), $msg);
+							echo $response ;	
+						}else{
+							$row = $pinDefault['data'][0];
+							$geMsg = $this->Model_Api->logPinStatus(2)['data'];
+							if(count($geMsg) <= 0){
+								$msg = "Access door not connected";
+							}else{
+								$msg = $geMsg[0]['text'];
+							}
+							$ins = $this->insertLogPin("", $post['room_id'], 1,$post['pin'], $datetime, $msg, 2);
+							$response = response("fail", array(), $msg);
+							echo $response ;
+						}
+					}else{
+						// Pin not have permission
+						$msg = "";
+						$geMsg = $this->Model_Api->logPinStatus(1)['data'];
+						if(count($geMsg) <= 0){
+							$msg = "Pin not have permission";
+						}else{
+							$msg = $geMsg[0]['text'];
+						}
+
+						$ins = $this->insertLogPin("", $post['room_id'], 0,$post['pin'], $datetime, $msg, 2);
+						$response = response("fail", array(), $msg);
+						echo $response ;
+					}
+				}
+
+				
+			}
+			
+		}else{
+			$response = response("fail", array(), "Failed restrict access");
+			echo $response ;
+		}
+	}
+	public function testdoor(){
+		$ip = $this->uri->segment(2);
+		$ch = $this->uri->segment(3);
+		$port = ":3000";
+		$url = "http://".$ip.$port."/api/door/ON".$ch."/3";
+		$result = $this->curl->simple_get($url);
+		if($this->curl->error_code > 0){
+				// print_r($this->curl->error_code);
+			echo "fail";
+		}else{
+			echo "success";
+		}
+	
+	}
+
+	private function insertLogPin($bookid, $roomid, $isdef, $pin, $datetime, $msg, $status)
+	{
+		$var = array(
+			"booking_id" => $bookid,
+			"room_id" =>  $roomid,
+			"is_default" => $isdef,
+			"pin" => $pin,
+			"datetime" => $datetime,
+			"msg" => $msg,
+			"status" => $status,
+		);
+		$pinDefault = $this->Model_Api->insertData("log_access_room", $var);
+		return "";
+	}
+	private function insertLogNik($bookid, $roomid, $isdef, $nik, $datetime, $msg, $status)
+	{
+		$var = array(
+			"booking_id" => $bookid,
+			"room_id" =>  $roomid,
+			"is_default" => $isdef,
+			"nik" => $nik,
+			"datetime" => $datetime,
+			"msg" => $msg,
+			"status" => $status,
+		);
+		$pinDefault = $this->Model_Api->insertData("log_access_room", $var);
+		return "";
+	}
+
+	private function openDoor($room_id, $pin = "", $model = ""){
+		$port = ":3000";
+		$data = $this->Model_Api->checkDataDoorOpen($room_id, "reader");
+		if($data['error'] == null && count($data['data'])){
+			$row = $data['data'][0];
+
+
+			if( $row['type'] == "falco" || $row['type'] == "falcoid" ){
+				$url =  $this->Model_URL->URLApiFalco();
+				// $url = "http://".$row['ip_controller'].$port."/api/door/ON".$row['channel']."/".$row['delay'];
+				// echo "========== <br>";	
+				$xmlbody = $this->falcoPulseData($row['ip_controller'],$row['channel']);
+				$result = $this->uploadDataToVaultFalco($url, $xmlbody);
+				// echo $url;
+				// echo "<br>";
+				// echo $xmlbody;
+				return "success";
+				
+			}else if($row['type'] == "custom"){
+				$ip = $row['ip_controller'];
+				$access_id = $row['access_id'];
+
+				 // http://localhost::3000/pulse-door/ip_address/access_id/pin_number
+
+				// $url = BIO_ACCESS_URL_PULSE_DOOR_PIN.$ip ."/".$access_id ."/".$pin;
+				$url = "http://".$row['ip_controller'].$port."/api/door/ON".$row['channel']."/".$row['delay'];
+
+				$result = $this->curl->simple_get($url);
+				if($this->curl->error_code > 0){
+					// print_r($this->curl->error_code);
+					return "fail";
+				}else{
+					return "success";
+				}
+			}else if($row['type'] == "custid"){ //BIO ACCESS
+				$ip = $row['ip_controller'];
+				$access_id = $row['access_id'];
+
+				 // http://localhost:3000/pulse-door/ip_address/access_id/pin_number
+
+				// $url = BIO_ACCESS_URL_PULSE_DOOR_PIN.$ip ."/".$access_id ."/".$pin;
+				$url = "http://".$row['ip_controller'].$port."/api/door/ON".$row['channel']."/".$row['delay'];
+				$result = $this->curl->simple_get($url);
+				if($this->curl->error_code > 0){
+					// print_r($this->curl->error_code);
+					return "fail";
+				}else{
+					return "success";
+				}
+			}else{
+				
+				return "fail";
+				
+			}
+			// print_r($row);
+			
+		}else{
+			return "failed";
+		}
+	}
+	public function falcoPulseData($ip, $doorId = null){
+		if($doorId == null ){
+			$doorId = 'string';
+		}
+		$t = '<?xml version="1.0" encoding="utf-8"?>
+			<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+			  <soap:Body>
+			    <FalcoPulseDoorOpen xmlns="WebAPI">
+			      <tokenLoginID>Falco</tokenLoginID>
+			      <tokenLoginPass>12345</tokenLoginPass>
+			      <IP>'.$ip.'</IP>
+			      <DoorID>'.$doorId .'</DoorID>
+			      <aError>string</aError>
+			    </FalcoPulseDoorOpen>
+			  </soap:Body>
+			</soap:Envelope>';
+		
+		return $t;
+	}
+	public function uploadDataToVaultFalco($url, $xmlbody){
+		$ch = curl_init();
+		curl_setopt($ch, CURLOPT_URL,$url);
+		curl_setopt($ch, CURLOPT_POST, 1);
+		curl_setopt($ch, CURLOPT_POSTFIELDS, $xmlbody);
+		curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: text/xml'));
+		// curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/x-www-form-urlencoded'));
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+		$server_output = curl_exec ($ch);
+		curl_close ($ch);
+		// $array_data = json_decode(json_encode(simplexml_load_string($server_output)), true);
+		return $server_output;
+	}
+}
