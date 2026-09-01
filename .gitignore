@@ -28,3 +28,5 @@
 
 # Large application packages
 *.apk
+
+/node_modules
