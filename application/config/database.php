@@ -8,6 +8,7 @@ $db['default'] = array(
 	'username' => DB_USERNAME,
 	'password' => DB_PASSWORD,
 	'database' => DB_DATABASE,
+	'port' => DB_PORT,
 	'dbdriver' => 'mysqli',
 	'dbprefix' => '',
 	'pconnect' => FALSE,
